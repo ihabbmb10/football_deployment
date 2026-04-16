@@ -1,9 +1,7 @@
-name: CI/CD Pipeline Football Prediction
+name: CI Football Project
 
 on:
   push:
-    branches: [ main ]
-  pull_request:
     branches: [ main ]
 
 jobs:
@@ -11,7 +9,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-
       # 1. Récupérer le code
       - name: Checkout code
         uses: actions/checkout@v3
@@ -20,29 +17,21 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
+          python-version: 3.10
 
-      # 3. Installer les dépendances
+      # 3. Installer dépendances
       - name: Install dependencies
         run: |
-          pip install --upgrade pip
           pip install pandas numpy scikit-learn flask joblib
 
-      # 4. Vérifier le training
-      - name: Run training script
+      # 4. Exécuter le training
+      - name: Run training
         run: |
           python train.py
 
-      # 5. Vérifier que les fichiers sont générés
-      - name: Check artifacts
+      # 5. Vérifier les fichiers
+      - name: Check files
         run: |
           test -f model_logistic.pkl
           test -f scaler.pkl
           test -f imputer.pkl
-
-      # 6. Tester l’API (optionnel simple)
-      - name: Start API and test
-        run: |
-          python app.py &
-          sleep 5
-          curl http://127.0.0.1:5000/
