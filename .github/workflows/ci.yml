@@ -1,7 +1,9 @@
-name: CI Football Project
+name: CI/CD Pipeline Football Prediction
 
 on:
   push:
+    branches: [ main ]
+  pull_request:
     branches: [ main ]
 
 jobs:
@@ -9,29 +11,75 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Récupérer le code
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # 2. Installer Python
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
-          python-version: 3.11
+          python-version: '3.10'
 
-      # 3. Installer dépendances
+      - name: Cache pip packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
       - name: Install dependencies
         run: |
-          pip install pandas numpy scikit-learn flask joblib
+          pip install --upgrade pip
+          pip install -r requirements.txt
 
-      # 4. Exécuter le training
-      - name: Run training
+      - name: Lint with flake8
+        run: |
+          pip install flake8
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+
+      - name: Run unit tests
+        run: |
+          pip install pytest
+          pytest tests/ -v
+
+      - name: Run training script
         run: |
           python train.py
 
-      # 5. Vérifier les fichiers
-      - name: Check files
+      - name: Check artifacts
         run: |
           test -f model_logistic.pkl
           test -f scaler.pkl
           test -f imputer.pkl
+
+      - name: Start API and test
+        run: |
+          nohup python app.py > api.log 2>&1 &
+          sleep 10
+          
+          # Test health endpoint
+          curl --fail http://127.0.0.1:5000/ || exit 1
+          
+          # Test prediction endpoint
+          curl -X POST http://127.0.0.1:5000/predict \
+            -H "Content-Type: application/json" \
+            -d '{
+              "rank_change_home": 3.0,
+              "rank_change_away": -2.0,
+              "home_goals_mean": 1.8,
+              "home_goals_mean_l5": 2.1,
+              "home_goals_suf_mean": 0.9,
+              "home_goals_suf_mean_l5": 1.0,
+              "home_rank_mean": 15.0,
+              "home_rank_mean_l5": 14.0,
+              "home_points_mean": 1500.0,
+              "home_points_mean_l5": 1510.0,
+              "away_goals_mean": 1.2,
+              "away_goals_mean_l5": 1.0,
+              "away_goals_suf_mean": 1.4,
+              "away_goals_suf_mean_l5": 1.5,
+              "away_rank_mean": 55.0,
+              "away_rank_mean_l5": 57.0,
+              "away_points_mean": 1200.0,
+              "away_points_mean_l5": 1180.0
+            }' | grep -q "prediction" || exit 1
